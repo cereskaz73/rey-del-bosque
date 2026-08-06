@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rey del Bosque</title>
+<style>
+  :root { --red:#c0392b; --red-dark:#7a2318; --blue:#2f6fa8; --blue-dark:#1c4666; --bg:#f4f1ea; --ink:#2b2b2b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:#e8e2d4; color:var(--ink); display:flex; flex-direction:column; align-items:center; min-height:100vh; }
+  h1 { margin:12px 0 4px; font-size:1.5rem; }
+  #status { min-height:1.4em; font-weight:600; margin:4px 0; text-align:center; padding:0 10px; }
+  #status.err { color:var(--red-dark); }
+  .hidden { display:none !important; }
+  button { background:var(--ink); color:#fff; border:0; border-radius:8px; padding:8px 14px; font-size:0.95rem; cursor:pointer; margin:3px; }
+  button:disabled { opacity:0.4; cursor:default; }
+  button.sec { background:#8a8172; }
+  input { padding:8px; border-radius:8px; border:1px solid #aaa; font-size:1rem; text-transform:uppercase; width:7ch; text-align:center; }
+  #lobby { display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:40px; background:var(--bg); padding:24px 32px; border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  #roomBadge { font-size:1.1rem; background:var(--bg); padding:4px 12px; border-radius:8px; margin:4px; }
+  #main { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:flex-start; padding:8px; }
+  #boardWrap { background:var(--bg); border-radius:14px; padding:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  svg#board { display:block; width:min(94vw,520px); height:auto; }
+  .cell { fill:#fbf9f4; stroke:#b7ad99; stroke-width:1.5; cursor:pointer; }
+  .cell.deployMine { fill:#efe7cf; }
+  .cell.hl { fill:#ffe08a; stroke:#c99700; stroke-width:2.5; }
+  .cell.hlAtk { fill:#ffb3a3; stroke:var(--red-dark); stroke-width:2.5; }
+  .piece { cursor:pointer; }
+  .piece circle { stroke-width:2.5; }
+  .piece.red circle { fill:var(--red); stroke:var(--red-dark); }
+  .piece.blue circle { fill:var(--blue); stroke:var(--blue-dark); }
+  .piece.sel circle { stroke:#ffd700; stroke-width:4; }
+  .piece text { pointer-events:none; }
+  .emoji { font-size:22px; text-anchor:middle; }
+  .rankTxt { font-size:9px; text-anchor:middle; fill:#fff; font-weight:700; }
+  #side { background:var(--bg); border-radius:14px; padding:12px; width:min(94vw,300px); box-shadow:0 2px 8px rgba(0,0,0,.15); display:flex; flex-direction:column; gap:8px; }
+  #tray { display:flex; flex-wrap:wrap; gap:6px; }
+  .trayPiece { display:flex; align-items:center; gap:4px; background:#fff; border:2px solid #ccc; border-radius:8px; padding:4px 8px; cursor:pointer; font-size:0.9rem; }
+  .trayPiece.sel { border-color:#ffd700; background:#fff7dc; }
+  .trayPiece.placed { opacity:0.35; }
+  #graveyard { font-size:0.85rem; }
+  #notes { width:100%; min-height:90px; border-radius:8px; border:1px solid #bbb; padding:6px; font-size:0.9rem; resize:vertical; }
+  #overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:10; }
+  #overlayCard { background:var(--bg); border-radius:14px; padding:20px 26px; max-width:92vw; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,.4); }
+  .combatShow { display:flex; gap:18px; justify-content:center; align-items:center; margin:10px 0; font-size:1rem; }
+  .combatShow .big { font-size:2.6rem; }
+  .vs { font-weight:800; }
+  #legend { font-size:0.78rem; line-height:1.5; color:#555; }
+  .atkOutline { fill:none; stroke:#c98a2c; stroke-width:4.5; pointer-events:none; }
+  .defOutline { fill:none; stroke:#7a2318; stroke-width:4.5; stroke-dasharray:7 4; pointer-events:none; }
+  .swordIcon { font-size:20px; text-anchor:middle; pointer-events:none; }
+  #btnRules { position:fixed; top:10px; right:10px; z-index:9; background:#5f7a52; }
+  #rulesModal { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:30; overflow-y:auto; padding:16px; }
+  #rulesClose { position:sticky; top:10px; float:right; margin:10px 10px 0 0; background:#c98a2c; color:#16241b; font-weight:700; z-index:2; }
+</style>
+<!-- Estilos del contenido de reglas (rey-del-bosque-reglas.html), acotados a #rulesPanel -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  #rulesPanel{
+    --pine:#16241b; --pine2:#1e3226; --parchment:#f3ecd6; --parchment-dim:#e8dfc2;
+    --rink:#22271f; --moss:#5f7a52; --amber:#c98a2c; --line:rgba(243,236,214,.14);
+    max-width:700px; margin:0 auto 30px; background:var(--pine); color:var(--parchment);
+    font-family:'Work Sans',system-ui,sans-serif; line-height:1.55; border-radius:18px; overflow:hidden;
+    background-image:
+      radial-gradient(ellipse at 20% -10%, rgba(95,122,82,.35), transparent 55%),
+      radial-gradient(ellipse at 100% 0%, rgba(201,138,44,.12), transparent 45%);
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+  }
+  #rulesPanel h1,#rulesPanel h2,#rulesPanel h3{ font-family:'Fraunces',serif; font-weight:600; margin:0 0 .3em; letter-spacing:.01em; }
+  #rulesPanel .wrap{ max-width:640px; margin:0 auto; padding:0 20px 50px; }
+  #rulesPanel header{ padding:36px 20px 24px; text-align:center; background:none; }
+  #rulesPanel header .eyebrow{ font-size:.72rem; letter-spacing:.22em; text-transform:uppercase; color:var(--amber); font-weight:600; }
+  #rulesPanel header h1{ font-size:2rem; margin-top:.35em; color:var(--parchment); }
+  #rulesPanel header p{ color:var(--parchment-dim); font-size:1rem; max-width:38ch; margin:.6em auto 0; opacity:.85; }
+  #rulesPanel .hexrule{ display:flex; align-items:center; justify-content:center; gap:9px; margin:20px 0; }
+  #rulesPanel .hexrule span{ width:9px; height:9px; background:var(--amber); clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); opacity:.9; }
+  #rulesPanel .hexrule::before,#rulesPanel .hexrule::after{ content:""; flex:1; max-width:90px; height:1px; background:var(--line); }
+  #rulesPanel section{ margin:38px 0; }
+  #rulesPanel .kicker{ font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--moss); font-weight:600; margin-bottom:.4em; }
+  #rulesPanel section h2{ font-size:1.4rem; color:var(--parchment); }
+  #rulesPanel section p, #rulesPanel section li{ color:var(--parchment-dim); font-size:.95rem; }
+  #rulesPanel .card{ background:var(--parchment); color:var(--rink); border-radius:16px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  #rulesPanel .card p, #rulesPanel .card li{ color:var(--rink); }
+  #rulesPanel .card strong{ color:var(--pine); }
+  #rulesPanel .pieces{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-top:14px; }
+  #rulesPanel .rpiece{ background:var(--parchment); border-radius:12px; padding:12px 10px; text-align:center; box-shadow:0 6px 16px rgba(0,0,0,.2); }
+  #rulesPanel .rpiece .e{ font-size:1.9rem; display:block; }
+  #rulesPanel .rpiece .n{ font-family:'Fraunces',serif; font-weight:600; color:var(--rink); font-size:.92rem; margin-top:.25em; }
+  #rulesPanel .rpiece .r{ font-size:.72rem; color:var(--moss); font-weight:600; }
+  #rulesPanel .rpiece .x{ font-size:.72rem; color:#8a7a4a; margin-top:.25em; display:block; }
+  #rulesPanel .steps{ counter-reset:step; list-style:none; padding:0; margin:14px 0 0; display:flex; flex-direction:column; gap:12px; }
+  #rulesPanel .steps li{ counter-increment:step; position:relative; padding-left:44px; color:var(--parchment-dim); }
+  #rulesPanel .steps li::before{ content:counter(step); position:absolute; left:0; top:-2px; width:30px; height:30px; border-radius:50%; background:var(--amber); color:var(--pine); font-weight:700; font-family:'Fraunces',serif; display:flex; align-items:center; justify-content:center; font-size:.95rem; }
+  #rulesPanel .steps li strong{ color:var(--parchment); }
+  #rulesPanel .callout{ border-left:3px solid var(--amber); padding:4px 0 4px 16px; margin:16px 0; color:var(--parchment-dim); font-size:.95rem; }
+  #rulesPanel .callout strong{ color:var(--amber); }
+  #rulesPanel .win{ display:flex; gap:14px; margin-top:10px; }
+  #rulesPanel .win > div{ flex:1; background:var(--pine2); border-radius:12px; padding:14px; border:1px solid var(--line); }
+  #rulesPanel .win h3{ font-size:1rem; color:var(--parchment); margin-bottom:.3em; }
+  #rulesPanel .win p{ font-size:.88rem; margin:0; }
+  #rulesPanel footer{ text-align:center; margin-top:50px; color:var(--parchment-dim); opacity:.55; font-size:.8rem; }
+  @media (max-width:480px){ #rulesPanel .win{ flex-direction:column; } }
+</style>
+</head>
+<body>
+<h1>🌲 Rey del Bosque 🐀👑</h1>
+<div id="roomBadge" class="hidden"></div>
+<div id="status">Conectando…</div>
+
+<div id="lobby">
+  <button id="btnCreate">Crear sala</button>
+  <div>— o únete a una —</div>
+  <div><input id="inpCode" maxlength="4" placeholder="CÓDIGO"><button id="btnJoin">Unirse</button></div>
+</div>
+
+<div id="main" class="hidden">
+  <div id="boardWrap"><svg id="board" viewBox="-225 -205 450 410"></svg></div>
+  <div id="side">
+    <div id="setupPanel" class="hidden">
+      <b>Coloca tus 9 fichas</b>
+      <div style="font-size:.82rem">Elige una ficha y toca una celda de tu zona. Toca una ficha ya colocada para recogerla. Memorízalas: <b>no volverás a verlas</b>.</div>
+      <div id="tray"></div>
+      <button id="btnConfirm" disabled>Confirmar despliegue</button>
+    </div>
+    <div id="playPanel" class="hidden">
+      <div id="actions">
+        <button id="btnSwap" class="sec">Modo intercambio</button>
+        <button id="btnEndTurn" class="hidden">Terminar turno (no atacar)</button>
+      </div>
+      <div id="graveyard"></div>
+      <b>📓 Tu cuaderno</b>
+      <textarea id="notes" placeholder="Apunta aquí dónde crees que está cada cosa… nadie lo ve, y el juego no te chiva nada."></textarea>
+    </div>
+    <div id="legend">🐝0 Abeja (gana al Oso) · 🕊️1 Paloma (mata Cepos atacando) · 🐀2 Rey Rata (si ataca y le aceptan, ¡pierdes!) · 🦌3 Ciervo · 🐗4 Jabalí · 🐺5 Lobo · 🐻6 Oso (no captura al Rey) · 🪤 Cepo ×2 (si ataca y le aceptan, se autoelimina; si lo atacan, se lleva al atacante)</div>
+  </div>
+</div>
+
+<div id="overlay" class="hidden"><div id="overlayCard"></div></div>
+
+<button id="btnRules" onclick="document.getElementById('rulesModal').classList.remove('hidden')">❓ Cómo se juega</button>
+
+<div id="rulesModal" class="hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div id="rulesPanel">
+    <button id="rulesClose" onclick="document.getElementById('rulesModal').classList.add('hidden')">✕ Volver a la partida</button>
+
+    <header>
+      <div class="eyebrow">Duelo de estrategia y memoria</div>
+      <h1>🌲 Rey del Bosque</h1>
+      <p>Despliega tu ejército de animales en secreto y conquista la guarida rival. Gana quien recuerde mejor lo que ha visto.</p>
+    </header>
+
+    <div class="wrap">
+
+      <div class="hexrule"><span></span></div>
+
+      <section>
+        <div class="kicker">El objetivo</div>
+        <h2>Capturar al Rey Rata enemigo</h2>
+        <div class="card">
+          <p>Cada bando coloca 9 fichas boca abajo en su lado del tablero. Cada ficha es un animal distinto, con un rango de fuerza. Os turnáis para mover y, si queréis, atacar. Gana quien captura al <strong>Rey Rata</strong> del rival — su ficha objetivo.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="kicker">La regla que lo cambia todo</div>
+        <h2>Aquí no hay chuleta: hay que recordar</h2>
+        <div class="card">
+          <p>Colocas tus 9 fichas al principio y las miras <strong>una sola vez</strong>. A partir de ahí, ni tú mismo vuelves a ver qué animal hay en cada casilla — solo ves el color de cada bando. Tienes que memorizar dónde pusiste cada cosa, y actualizar esa memoria según mováis fichas.</p>
+          <p>Una ficha solo se revela para siempre si alguien <strong>huye</strong> de un combate con ella. En un combate normal, se ven un instante y luego vuelven a taparse.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="kicker">Las piezas</div>
+        <h2>7 rangos + 2 trampas</h2>
+        <div class="pieces">
+          <div class="rpiece"><span class="e">🐝</span><span class="n">Abeja</span><span class="r">Rango 0</span><span class="x">Gana al Oso</span></div>
+          <div class="rpiece"><span class="e">🕊️</span><span class="n">Paloma</span><span class="r">Rango 1</span><span class="x">Neutraliza al Cepo</span></div>
+          <div class="rpiece"><span class="e">🐀</span><span class="n">Rey Rata</span><span class="r">Rango 2</span><span class="x">El objetivo. No ataca</span></div>
+          <div class="rpiece"><span class="e">🦌</span><span class="n">Ciervo</span><span class="r">Rango 3</span><span class="x">Rango normal</span></div>
+          <div class="rpiece"><span class="e">🐗</span><span class="n">Jabalí</span><span class="r">Rango 4</span><span class="x">Rango normal</span></div>
+          <div class="rpiece"><span class="e">🐺</span><span class="n">Lobo</span><span class="r">Rango 5</span><span class="x">Rango normal</span></div>
+          <div class="rpiece"><span class="e">🐻</span><span class="n">Oso</span><span class="r">Rango 6</span><span class="x">No captura al Rey Rata</span></div>
+          <div class="rpiece"><span class="e">🪤</span><span class="n">Cepo</span><span class="r">×2, sin rango</span><span class="x">No ataca. Destruye a quien lo ataque</span></div>
+        </div>
+        <p style="margin-top:12px; font-size:.88rem; opacity:.75;">En un combate normal gana el rango más alto — con esas 3 excepciones señaladas arriba.</p>
+      </section>
+
+      <section>
+        <div class="kicker">Tu turno</div>
+        <h2>Mover, y luego (si quieres) atacar</h2>
+        <ol class="steps">
+          <li><strong>Mueve.</strong> Obligatorio. Una ficha a una casilla vecina vacía, o intercambia dos fichas tuyas entre sí (estén donde estén).</li>
+          <li><strong>Ataca (opcional).</strong> Cualquier ficha tuya puede atacar a una ficha enemiga en una casilla vecina — no hace falta que sea la que acabas de mover.</li>
+        </ol>
+      </section>
+
+      <section>
+        <div class="kicker">Al ser atacado</div>
+        <h2>Aceptar o huir</h2>
+        <div class="card">
+          <p><strong>Aceptar:</strong> se revelan ambas fichas un instante. Gana el rango más alto (con las excepciones de arriba). La perdedora se retira; la ganadora vuelve a ocultarse.</p>
+          <p style="margin-top:10px;"><strong>Huir:</strong> tu ficha atacada se queda como estaba, sin mostrarse. Pero como coste, tienes que revelar <em>otra</em> ficha tuya, para siempre, la que tú elijas. Puedes huir incluso si esa ficha ya estaba revelada.</p>
+        </div>
+        <div class="callout"><strong>Ojo:</strong> si al huir eliges (sin querer) revelar a tu propio Rey Rata, pierdes la partida en el acto. Igual que si atacas con él directamente — el Rey Rata no puede pelear.</div>
+      </section>
+
+      <section>
+        <div class="kicker">Cómo acaba</div>
+        <h2>Victoria, derrota y tablas</h2>
+        <div class="win">
+          <div><h3>🏆 Victoria</h3><p>Capturas al Rey Rata enemigo en combate.</p></div>
+          <div><h3>💀 Derrota instantánea</h3><p>Tu Rey Rata ataca, o se revela como coste de huir.</p></div>
+        </div>
+        <div class="win" style="margin-top:10px;">
+          <div><h3>🤝 Tablas</h3><p>Si ambos bandos pierden Ciervo, Jabalí y Lobo, nadie tiene ya con qué capturar el Rey Rata rival.</p></div>
+          <div><h3>🧠 Consejo</h3><p>Lleva la cuenta mental (o en un papel) de lo que ves revelarse. Es la mitad del juego.</p></div>
+        </div>
+      </section>
+
+    </div>
+
+    <footer>Hecho por Ceres · reglas para jugar Rey del Bosque</footer>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="config.js"></script>
+<script src="client.js"></script>
+</body>
+</html>
